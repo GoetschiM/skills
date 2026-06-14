@@ -64,6 +64,54 @@ def find_all_skills() -> list[dict[str, Any]]:
     return skills
 
 
+# ── Upload Helpers ──────────────────────────────────────────────────────
+def handle_upload_skill(args: dict) -> dict:
+    """Upload en neue Skill is Repo und commit/Push uf GitHub"""
+    name = args.get("name", "")
+    category = args.get("category", "uncategorized")
+    content = args.get("content", "")
+    author = args.get("author", "anonymous")
+    version = args.get("version", "1.0.0")
+
+    if not name or not content:
+        return {"success": False, "error": "Name und Content sind Pflicht"}
+
+    safe_name = name.lower().replace(" ", "-").replace("_", "-")
+    safe_name = "".join(c for c in safe_name if c.isalnum() or c == "-")
+    safe_cat = category.lower().replace(" ", "-")
+
+    target_dir = REPO_PATH / safe_cat / safe_name
+    target_file = target_dir / "SKILL.md"
+
+    try:
+        target_dir.mkdir(parents=True, exist_ok=True)
+
+        if not content.strip().startswith("---"):
+            frontmatter = {"name": safe_name, "category": safe_cat, "author": author, "version": version}
+            fm_yaml = yaml.dump(frontmatter, default_flow_style=False, allow_unicode=True)
+            content = "---\n" + fm_yaml + "---\n\n" + content
+
+        target_file.write_text(content, encoding="utf-8")
+
+        subprocess.run(["git", "-C", str(REPO_PATH), "add", str(target_file)], capture_output=True, timeout=30)
+        subprocess.run(
+            ["git", "-C", str(REPO_PATH), "commit", "-m", "feat: add " + safe_name + " skill (" + safe_cat + ")", "--author", author + " <" + author + "@skills.goetschi-labs.ch>"],
+            capture_output=True, timeout=30
+        )
+        push = subprocess.run(["git", "-C", str(REPO_PATH), "push"], capture_output=True, text=True, timeout=30)
+
+        return {
+            "success": True,
+            "name": safe_name,
+            "category": safe_cat,
+            "path": safe_cat + "/" + safe_name + "/SKILL.md",
+            "git_push": push.returncode == 0,
+            "git_output": push.stdout + push.stderr
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
 # ── MCP Tool Implementations ──────────────────────────────────────────
 def handle_list_skills(args: dict) -> list:
     """Liste alli verfügbare Skills"""
@@ -126,6 +174,7 @@ HANDLERS = {
     "get_skill": handle_get_skill,
     "get_categories": handle_get_categories,
     "pull_from_github": handle_pull_from_github,
+    "upload_skill": handle_upload_skill,
 }
 
 
@@ -168,9 +217,24 @@ def handle_mcp_request(req: dict) -> dict:
                     "name": "pull_from_github",
                     "description": "Pull latest changes from GitHub (sync MinIO/Coolify)",
                     "inputSchema": {"type": "object", "properties": {}}
+                },
+                {
+                    "name": "upload_skill",
+                    "description": "Upload en neue Skill is Repo -> Git Commit + Push uf GitHub",
+                    "inputSchema": {
+                        "type": "object",
+                        "required": ["name", "content"],
+                        "properties": {
+                            "name": {"type": "string", "description": "Skill-Name"},
+                            "category": {"type": "string", "description": "Kategorie (z.B. devops)"},
+                            "content": {"type": "string", "description": "Vollständige SKILL.md Content"},
+                            "author": {"type": "string", "description": "Author-Name"},
+                            "version": {"type": "string", "description": "Version (default: 1.0.0)"}
+                        }
+                    }
                 }
             ]
-        }
+            }
     
     if method == "tools/call":
         tool_name = args.get("name", "")
@@ -196,14 +260,31 @@ def main():
             def do_POST(self):
                 length = int(self.headers.get("Content-Length", 0))
                 body = self.rfile.read(length)
+                path = self.path
+
                 try:
-                    req = json.loads(body)
-                    resp = handle_mcp_request(req)
+                    if path == "/api/upload":
+                        # Upload direkt via API
+                        data = json.loads(body)
+                        result = handle_upload_skill(data)
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/json")
+                        self.send_header("Access-Control-Allow-Origin", "*")
+                        self.end_headers()
+                        self.wfile.write(json.dumps(result).encode())
+                        return
+                    elif path == "/api/rpc" or path == "/":
+                        # MCP JSON-RPC
+                        req = json.loads(body)
+                        resp = handle_mcp_request(req)
+                    else:
+                        resp = {"content": [{"type": "text", "text": json.dumps({"error": f"Unknown path: {path}"})}], "isError": True}
                 except Exception as e:
                     resp = {"content": [{"type": "text", "text": json.dumps({"error": str(e)})}], "isError": True}
                 
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
+                self.send_header("Access-Control-Allow-Origin", "*")
                 self.end_headers()
                 self.wfile.write(json.dumps(resp).encode())
             
