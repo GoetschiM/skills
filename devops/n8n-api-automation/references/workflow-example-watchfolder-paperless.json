@@ -1,0 +1,125 @@
+{
+  "name": "📄 Doc Pipeline — Watchfolder → Paperless",
+  "description": "Scannt NextCloud Watchfolder alle 4h + manuell via Webhook. Sendet PDFs an Paperless (OCR), löscht aus Watchfolder. MinIO-Backup folgt.",
+  "active": false,
+  "settings": {"executionOrder": "v1"},
+  "tags": ["pipeline", "documents"],
+  "homeProject": {"id": "f4PKHJYoUXQAMY4P"},
+  "nodes": [
+    {
+      "name": "Webhook (Test)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [-960, 240],
+      "parameters": {"path": "doc-pipeline", "responseMode": "onReceived", "responseData": "allEntries"}
+    },
+    {
+      "name": "Manuell Test",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-960, -240],
+      "parameters": {}
+    },
+    {
+      "name": "Schedule (alle 4h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [-960, 0],
+      "parameters": {"rule": {"interval": [{"field": "hours", "hoursInterval": 4}]}}
+    },
+    {
+      "name": "Scan Watchfolder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-480, 0],
+      "parameters": {
+        "method": "PROPFIND",
+        "url": "http://10.0.60.121:8080/remote.php/dav/files/michel/Watchfolder/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [{"name": "body", "value": "<?xml version=\"1.0\"?><d:propfind xmlns:d=\"DAV:\"><d:prop><d:displayname/><d:getcontentlength/><d:getcontenttype/><d:getlastmodified/></d:prop></d:propfind>"}]
+        },
+        "options": {"timeout": 30}
+      },
+      "credentials": {"httpBasicAuth": {"id": "CRED_ID_PLACEHOLDER", "name": "NextCloud"}}
+    },
+    {
+      "name": "Parse XML → PDFs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 1,
+      "position": [-160, 0],
+      "parameters": {
+        "language": "python",
+        "code": "import xml.etree.ElementTree as ET\nitems = []\ndata = items[0].get('json', {})\nbody = data.get('body', '')\ntry:\n    root = ET.fromstring(body)\n    ns = {'d': 'DAV:'}\n    for resp in root.findall('.//d:response', ns):\n        href_el = resp.find('d:href', ns)\n        if href_el is None: continue\n        href = href_el.text or ''\n        fn = href.rstrip('/').split('/')[-1] if href else ''\n        if not fn or not fn.lower().endswith('.pdf'): continue\n        props = resp.find('d:propstat/d:prop', ns)\n        sz = (props.find('d:getcontentlength', ns).text if props is not None and props.find('d:getcontentlength', ns) is not None else '')\n        items.append({'filename': fn, 'size': sz})\nexcept Exception as e:\n    return [{'error': str(e), 'xml_preview': body[:500]}]\nreturn items"
+      }
+    },
+    {
+      "name": "Loop (1 File)",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [160, 0],
+      "parameters": {"batchSize": 1, "options": {}}
+    },
+    {
+      "name": "Download PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, -160],
+      "parameters": {
+        "method": "GET",
+        "url": "http://10.0.60.121:8080/remote.php/dav/files/michel/Watchfolder/{{ $json.filename }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {"timeout": 60, "response": {"responseFormat": "file"}, "property": "data"}
+      },
+      "credentials": {"httpBasicAuth": {"id": "CRED_ID_PLACEHOLDER", "name": "NextCloud"}}
+    },
+    {
+      "name": "Paperless (OCR)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [800, -160],
+      "parameters": {
+        "method": "POST",
+        "url": "http://10.0.60.121:8015/api/documents/post_document/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {"name": "title", "value": "={{ $json.filename }}"},
+            {"name": "document", "value": "={{ $binary.data }}"}
+          ]
+        },
+        "options": {"timeout": 120}
+      },
+      "credentials": {"httpHeaderAuth": {"id": "CRED_ID_PLACEHOLDER", "name": "Paperless API"}}
+    },
+    {
+      "name": "Löschen aus Watchfolder",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1120, -160],
+      "parameters": {
+        "method": "DELETE",
+        "url": "http://10.0.60.121:8080/remote.php/dav/files/michel/Watchfolder/{{ $json.filename }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth",
+        "options": {"timeout": 30}
+      },
+      "credentials": {"httpBasicAuth": {"id": "CRED_ID_PLACEHOLDER", "name": "NextCloud"}}
+    }
+  ],
+  "connections": {
+    "Webhook (Test)": {"main": [[{"node": "Scan Watchfolder", "type": "main", "index": 0}]]},
+    "Manuell Test": {"main": [[{"node": "Scan Watchfolder", "type": "main", "index": 0}]]},
+    "Schedule (alle 4h)": {"main": [[{"node": "Scan Watchfolder", "type": "main", "index": 0}]]},
+    "Scan Watchfolder": {"main": [[{"node": "Parse XML → PDFs", "type": "main", "index": 0}]]},
+    "Parse XML → PDFs": {"main": [[{"node": "Loop (1 File)", "type": "main", "index": 0}]]},
+    "Loop (1 File)": {"main": [[{"node": "Download PDF", "type": "main", "index": 0}]]},
+    "Download PDF": {"main": [[{"node": "Paperless (OCR)", "type": "main", "index": 0}]]},
+    "Paperless (OCR)": {"main": [[{"node": "Löschen aus Watchfolder", "type": "main", "index": 0}]]}
+  }
+}
