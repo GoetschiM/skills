@@ -1,13 +1,268 @@
 <!DOCTYPE html>
 <html lang="de">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Goetschi Skills Hub</title>
-    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧩</text></svg>" />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skills Hub — Goetschi Labs</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- ══════════════════ LOGIN ══════════════════ -->
+<div id="login-screen" class="screen active">
+  <div class="login-bg"></div>
+  <div class="login-card">
+    <div class="login-logo">🧠</div>
+    <h1 class="login-title">Skills Hub</h1>
+    <p class="login-sub">Goetschi Labs · Skill Marketplace</p>
+    <form id="login-form">
+      <div class="field">
+        <label for="user-input">Benutzer</label>
+        <input type="text" id="user-input" placeholder="Benutzername" autocomplete="username" autofocus>
+      </div>
+      <div class="field">
+        <label for="pass-input">Passwort</label>
+        <input type="password" id="pass-input" placeholder="Passwort" autocomplete="current-password">
+      </div>
+      <p id="login-error" class="login-error hidden"></p>
+      <button type="submit" class="btn btn-primary btn-full" id="login-btn">Anmelden</button>
+    </form>
+  </div>
+</div>
+
+<!-- ══════════════════ APP SHELL ══════════════════ -->
+<div id="app-shell" class="screen">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-icon">🧠</span>
+      <div class="brand-text">
+        <div class="brand-name">Skills Hub</div>
+        <div class="brand-sub" id="brand-count">Wird geladen…</div>
+      </div>
+    </div>
+
+    <div class="sidebar-search-wrap">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="global-search" placeholder="Suchen… ⌘K" autocomplete="off">
+    </div>
+
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-view="dashboard">
+        <span class="nav-icon">▦</span><span>Dashboard</span>
+      </button>
+      <button class="nav-item" data-view="browse">
+        <span class="nav-icon">◈</span><span>Alle Skills</span>
+      </button>
+      <button class="nav-item" data-view="upload">
+        <span class="nav-icon">⬆</span><span>Upload</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section-label">Kategorien</div>
+    <div id="sidebar-cats" class="sidebar-cats">
+      <div class="skeleton-line"></div>
+      <div class="skeleton-line" style="width:70%"></div>
+      <div class="skeleton-line" style="width:85%"></div>
+      <div class="skeleton-line" style="width:60%"></div>
+    </div>
+
+    <div class="sidebar-footer">
+      <button id="sync-btn" class="sync-btn" title="Git Pull von GitHub">
+        <span id="sync-icon">↺</span> GitHub Sync
+      </button>
+      <div class="sidebar-user">
+        <span class="user-dot"></span>
+        <span id="sidebar-username">—</span>
+        <button class="logout-btn" onclick="logout()" title="Abmelden">⏻</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main id="main-content">
+
+    <!-- ── Dashboard ── -->
+    <section id="view-dashboard" class="view active">
+      <div class="view-header">
+        <h2>Dashboard</h2>
+        <p class="view-sub">Übersicht deiner Skills-Bibliothek</p>
+      </div>
+      <div class="stats-row" id="stats-row">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-total"><span class="skeleton-inline"></span></div>
+          <div class="stat-label">Skills total</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-cats"><span class="skeleton-inline"></span></div>
+          <div class="stat-label">Kategorien</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-github">—</div>
+          <div class="stat-label">GitHub Token</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-version">—</div>
+          <div class="stat-label">Server Version</div>
+        </div>
+      </div>
+
+      <div id="agent-card" class="agent-card hidden"></div>
+
+      <div class="section-header">
+        <h3>Kategorien</h3>
+        <button class="link-btn" onclick="switchView('browse')">Alle anzeigen →</button>
+      </div>
+      <div id="cat-grid" class="cat-grid">
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+      </div>
+
+      <div class="section-header" style="margin-top:32px">
+        <h3>Neueste Skills</h3>
+        <button class="link-btn" onclick="switchView('browse')">Alle anzeigen →</button>
+      </div>
+      <div id="recent-grid" class="skill-grid">
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+      </div>
+    </section>
+
+    <!-- ── Browse ── -->
+    <section id="view-browse" class="view">
+      <div class="view-header">
+        <h2>Alle Skills <span id="browse-count" class="count-badge"></span></h2>
+        <p class="view-sub" id="browse-filter-desc">Alle Kategorien</p>
+      </div>
+      <div class="browse-toolbar">
+        <div class="toolbar-search-wrap">
+          <span class="search-icon">⌕</span>
+          <input type="text" id="browse-search" placeholder="Skills filtern…" autocomplete="off">
+        </div>
+        <select id="cat-filter" class="cat-select">
+          <option value="">Alle Kategorien</option>
+        </select>
+        <select id="sort-select" class="cat-select">
+          <option value="name">A–Z</option>
+          <option value="cat">Kategorie</option>
+        </select>
+      </div>
+      <div id="browse-grid" class="skill-grid">
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+        <div class="skeleton-card"></div>
+      </div>
+      <div id="browse-empty" class="empty-state hidden">
+        <div class="empty-icon">◎</div>
+        <div class="empty-title">Keine Skills gefunden</div>
+        <div class="empty-sub">Suchbegriff oder Filter anpassen</div>
+      </div>
+    </section>
+
+    <!-- ── Upload ── -->
+    <section id="view-upload" class="view">
+      <div class="view-header">
+        <h2>Skill hochladen</h2>
+        <p class="view-sub">Neuen Skill erstellen und auf GitHub pushen</p>
+      </div>
+      <div class="upload-card">
+        <div class="upload-mode-tabs">
+          <button type="button" class="umode active" data-mode="single" onclick="setUploadMode('single')">📄 Einzeldatei</button>
+          <button type="button" class="umode" data-mode="zip" onclick="setUploadMode('zip')">🗂 ZIP-Ordner</button>
+        </div>
+        <form id="upload-form">
+          <div class="form-row">
+            <div class="field">
+              <label>Name *</label>
+              <input type="text" id="upload-name" placeholder="z.B. docker-compose-stack" required>
+            </div>
+            <div class="field">
+              <label>Kategorie *</label>
+              <input type="text" id="upload-category" placeholder="z.B. devops" list="cat-datalist" required>
+              <datalist id="cat-datalist"></datalist>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label>Beschreibung *</label>
+              <input type="text" id="upload-description" placeholder="Kurze Beschreibung" required>
+            </div>
+            <div class="field" style="max-width:140px">
+              <label>Version</label>
+              <input type="text" id="upload-version" value="1.0.0" placeholder="1.0.0">
+            </div>
+          </div>
+          <div class="field">
+            <label>Tags <span class="field-hint">(kommagetrennt)</span></label>
+            <input type="text" id="upload-tags" placeholder="docker, compose, stack">
+          </div>
+          <div class="field" id="single-content-field">
+            <label>SKILL.md Inhalt *</label>
+            <textarea id="upload-content" rows="14" placeholder="# Skill Name&#10;&#10;Beschreibung des Skills…"></textarea>
+          </div>
+          <div class="field hidden" id="zip-content-field">
+            <label>ZIP-Ordner *<span class="field-hint"> (muss SKILL.md im Root enthalten)</span></label>
+            <div id="zip-dropzone" class="zip-dropzone">
+              <input type="file" id="zip-file" accept=".zip,application/zip" hidden>
+              <div class="dz-inner">
+                <div class="dz-icon">🗂</div>
+                <div class="dz-text">ZIP hierher ziehen oder klicken</div>
+                <div class="dz-sub" id="zip-name">Ganzer Skill-Ordner als .zip — inkl. scripts/, references/ …</div>
+              </div>
+            </div>
+          </div>
+          <div class="upload-actions">
+            <button type="button" class="btn btn-ghost" id="upload-clear">Leeren</button>
+            <button type="submit" class="btn btn-primary" id="upload-btn">
+              <span>⬆ Skill hochladen</span>
+            </button>
+          </div>
+        </form>
+        <div id="upload-result" class="upload-result hidden"></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ══════════════════ DETAIL PANEL ══════════════════ -->
+<div id="detail-overlay" class="detail-overlay hidden" onclick="handleOverlayClick(event)">
+  <div id="detail-panel" class="detail-panel">
+    <div class="panel-header">
+      <div class="panel-meta-row">
+        <span id="panel-category-badge" class="category-badge"></span>
+        <span id="panel-version" class="panel-version"></span>
+      </div>
+      <div class="panel-actions">
+        <select id="panel-version-select" class="panel-version-select hidden" onchange="loadSkillVersion()" title="Version"></select>
+        <button class="panel-btn" id="dl-md-btn" onclick="downloadCurrent('md')" title="SKILL.md herunterladen">⬇ md</button>
+        <button class="panel-btn" id="dl-zip-btn" onclick="downloadCurrent('zip')" title="Ganzer Ordner als ZIP">⬇ zip</button>
+        <button class="panel-btn" id="copy-btn" onclick="copySkillContent()" title="SKILL.md kopieren">⎘ Kopieren</button>
+        <button class="panel-btn panel-close" onclick="closeDetail()" title="Schließen (Esc)">✕</button>
+      </div>
+    </div>
+    <h2 id="panel-title" class="panel-title"></h2>
+    <div id="panel-tags" class="panel-tags"></div>
+    <div id="panel-history" class="panel-history hidden"></div>
+    <div id="panel-body" class="panel-body"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ TOASTS ══════════════════ -->
+<div id="toast-container"></div>
+
+<script src="/app.js"></script>
+</body>
 </html>
